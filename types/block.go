@@ -20,7 +20,7 @@ func (b *Block) Print() {
 		// Show first few combinations
 		count := 0
 		fmt.Print(" [")
-		for e := b.Combinations.Front(); e != nil && count < 2; e = e.Next() {
+		for e := b.Combinations.Front(); e != nil; e = e.Next() {
 			if count > 0 {
 				fmt.Print(", ")
 			}
@@ -28,12 +28,45 @@ func (b *Block) Print() {
 			fmt.Printf("%032b", combination)
 			count++
 		}
-		if b.Combinations.Len() > 2 {
-			fmt.Print("...")
-		}
 		fmt.Print("]")
 	} else {
 		fmt.Print(", Combinations: none")
 	}
 	fmt.Println("}")
+}
+
+// PrintWithWidth prints the block and its combinations, padding bitmasks to the given width.
+func (b *Block) PrintWithWidth(width uint8) {
+	fmt.Printf("Block{ColorID: %d, Size: %d", b.ColorID, b.Size)
+	if b.Combinations != nil && b.Combinations.Len() > 0 {
+		fmt.Printf(", Combinations: %d total", b.Combinations.Len())
+		count := 0
+		fmt.Print(" [")
+		for e := b.Combinations.Front(); e != nil; e = e.Next() {
+			if count > 0 {
+				fmt.Print(", ")
+			}
+			if combination, ok := e.Value.(*big.Int); ok {
+				// Render bits left-to-right with cell index == bit index.
+				// Position 0 (leftmost) corresponds to bit 0, etc.
+				w := int(width)
+				builder := make([]byte, w)
+				for pos := 0; pos < w; pos++ {
+					if combination.Bit(pos) == 1 {
+						builder[pos] = '1'
+					} else {
+						builder[pos] = '0'
+					}
+				}
+				fmt.Print(string(builder))
+			} else {
+				fmt.Print("<invalid>")
+			}
+			count++
+		}
+		fmt.Print("]")
+	} else {
+		fmt.Print(", Combinations: none")
+	}
+	fmt.Print("}")
 }

@@ -31,8 +31,8 @@ func (l *Line) CheckCommonFillCell() map[uint8][]uint8 {
 		commonColor, exists := commonColorMap[block.ColorID]
 		if !exists {
 			commonColor = big.NewInt(0)
-			for i := range l.Size {
-				commonColor.SetBit(commonColor, int(i), 1)
+			for i := 0; i < int(l.Size); i++ {
+				commonColor.SetBit(commonColor, i, 1)
 			}
 		}
 
@@ -45,8 +45,7 @@ func (l *Line) CheckCommonFillCell() map[uint8][]uint8 {
 	}
 
 	for colorID, commonColor := range commonColorMap {
-		bitLength := commonColor.BitLen()
-		for i := range bitLength {
+		for i := 0; i < int(l.Size); i++ {
 			if commonColor.Bit(i) == 1 {
 				result[colorID] = append(result[colorID], uint8(i))
 			}
@@ -81,8 +80,7 @@ func (l *Line) CheckCommonEmptyCell() []uint8 {
 	}
 
 	// Find positions of 0 bits (common empty cells)
-	bitLength := commonEmpty.BitLen()
-	for i := range bitLength {
+	for i := 0; i < int(l.Size); i++ {
 		if commonEmpty.Bit(i) == 0 {
 			result = append(result, uint8(i))
 		}
@@ -98,7 +96,8 @@ func (l *Line) Print() {
 		if i > 0 {
 			fmt.Print(", ")
 		}
-		fmt.Printf("Block{ColorID: %d, Size: %d}", block.ColorID, block.Size)
+		// Delegate combination rendering to Block
+		block.PrintWithWidth(l.Size)
 	}
 	fmt.Println("]}")
 }
