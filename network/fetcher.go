@@ -1,11 +1,14 @@
 package fetcher
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
+	"sync"
+	"time"
 
 	"nonogram-solver/types"
 )
@@ -35,37 +38,86 @@ const (
 )
 
 // FetchPage retrieves the HTML content for a nonogram by ID
-// It tries multiple URL patterns to accommodate different nonogram formats
+// It tries multiple URL patterns in parallel to accommodate different nonogram formats
 func FetchPage(nonogramID string) ([]byte, error) {
 	if nonogramID == "" {
 		return nil, fmt.Errorf("nonogramID cannot be empty")
 	}
 
-	// Try both URL patterns in case the nonogram uses a different format
+	// Try both URL patterns in parallel
 	urls := []string{
 		fmt.Sprintf(baseURLPattern1, nonogramID),
 		fmt.Sprintf(baseURLPattern2, nonogramID),
 	}
 
-	client := &http.Client{}
+	// Create a context with timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
+	// Channel to receive the result from the first successful request
+	resultChan := make(chan fetchResult, len(urls))
+
+	// Start goroutines for each URL
+	var wg sync.WaitGroup
 	for _, url := range urls {
-		resp, err := client.Get(url)
-		if err != nil {
-			continue // Try next URL if this one fails
-		}
-		defer resp.Body.Close()
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			fetchURL(ctx, url, resultChan)
+		}(url)
+	}
 
-		if resp.StatusCode == http.StatusOK {
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read response body from %s: %w", url, err)
-			}
-			return body, nil
+	// Close the channel when all goroutines are done
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Wait for the first successful result
+	for result := range resultChan {
+		if result.err == nil {
+			cancel() // Cancel other requests
+			return result.body, nil
 		}
 	}
 
 	return nil, fmt.Errorf("nonogram with ID %s not found on either URL pattern", nonogramID)
+}
+
+// fetchResult holds the result of a URL fetch attempt
+type fetchResult struct {
+	body []byte
+	err  error
+	url  string
+}
+
+// fetchURL attempts to fetch a URL and sends the result to the channel
+func fetchURL(ctx context.Context, url string, resultChan chan<- fetchResult) {
+	client := &http.Client{}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		resultChan <- fetchResult{nil, fmt.Errorf("failed to create request for %s: %w", url, err), url}
+		return
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		resultChan <- fetchResult{nil, fmt.Errorf("failed to fetch %s: %w", url, err), url}
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			resultChan <- fetchResult{nil, fmt.Errorf("failed to read response body from %s: %w", url, err), url}
+			return
+		}
+		resultChan <- fetchResult{body, nil, url}
+	} else {
+		resultChan <- fetchResult{nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url), url}
+	}
 }
 
 // ParseNonogramData extracts and decodes the nonogram clues from the HTML
