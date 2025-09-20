@@ -3,10 +3,70 @@ package factory
 import (
 	"container/list"
 	"math/big"
-	"sort"
 
 	"nonogram-solver/types"
 )
+
+// GenerateCombinations returns the set of bitmask combinations for the i-th block
+// described by clues within a line of given size. It honors color adjacency rules:
+// adjacent blocks with the same color require at least one empty cell between them;
+// blocks with different colors can be adjacent without an empty cell.
+func GenerateCombinations(clues []types.ClueItem, size uint8, i int) *list.List {
+	if size == 0 || len(clues) == 0 || i < 0 || i >= len(clues) {
+		return list.New()
+	}
+
+	numBlocks := len(clues)
+
+	// Minimum required gap between adjacent blocks based on color equality.
+	minGaps := make([]int, maxInt(numBlocks-1, 0))
+	for gi := 0; gi < len(minGaps); gi++ {
+		if clues[gi].ColorID == clues[gi+1].ColorID {
+			minGaps[gi] = 1
+		} else {
+			minGaps[gi] = 0
+		}
+	}
+
+	// Compute minimal occupied width and available free slots to distribute.
+	sizesSum := 0
+	for bi := 0; bi < numBlocks; bi++ {
+		sizesSum += int(clues[bi].BlockSize)
+	}
+	minGapSum := 0
+	for _, g := range minGaps {
+		minGapSum += g
+	}
+
+	lineSize := int(size)
+	minRequired := sizesSum + minGapSum
+	if minRequired > lineSize {
+		return list.New()
+	}
+
+	freeSlots := lineSize - minRequired
+
+	// Precompute minimal start for each block (with zero extra spaces allocated).
+	startMin := make([]int, numBlocks)
+	accum := 0
+	for bi := 0; bi < numBlocks; bi++ {
+		startMin[bi] = accum
+		accum += int(clues[bi].BlockSize)
+		if bi < numBlocks-1 {
+			accum += minGaps[bi]
+		}
+	}
+
+	// Generate masks for the i-th block by shifting across the free slots.
+	lst := list.New()
+	runLen := int(clues[i].BlockSize)
+	minStart := startMin[i]
+	maxStart := minStart + freeSlots
+	for s := minStart; s <= maxStart; s++ {
+		lst.PushBack(makeRunMask(runLen, s))
+	}
+	return lst
+}
 
 // GenerateCombinationsForLines populates combinations for every line in the collection.
 func GenerateCombinationsForLines(lines *types.Lines) {
@@ -62,49 +122,28 @@ func GenerateCombinationsForLine(line *types.Line) {
 	}
 
 	freeSlots := lineSize - minRequired
-	numGaps := numBlocks + 1 // left pad, inter-gaps, right pad
 
-	// Prepare unique mask sets per block.
-	perBlockMasks := make([]map[string]*big.Int, numBlocks)
-	for i := 0; i < numBlocks; i++ {
-		perBlockMasks[i] = make(map[string]*big.Int)
+	// Precompute minimal start for each block (with zero extra spaces allocated).
+	// startMin[bi] = sum_{j<bi} size[j] + sum_{j<bi} minGaps[j]
+	startMin := make([]int, numBlocks)
+	accum := 0
+	for bi := 0; bi < numBlocks; bi++ {
+		startMin[bi] = accum
+		accum += int(line.Blocks[bi].Size)
+		if bi < numBlocks-1 {
+			accum += minGaps[bi]
+		}
 	}
 
-	// Enumerate distributions of extra spaces across gaps.
-	enumerateDistributions(numGaps, freeSlots, func(extras []int) {
-		// Compute start positions from extras and minGaps
-		starts := make([]int, numBlocks)
-		pos := extras[0]
-		for bi := 0; bi < numBlocks; bi++ {
-			starts[bi] = pos
-			pos += int(line.Blocks[bi].Size)
-			if bi < numBlocks-1 {
-				pos += minGaps[bi] + extras[bi+1]
-			}
-		}
-
-		// Record masks for each block at these starts
-		for bi := 0; bi < numBlocks; bi++ {
-			mask := makeRunMask(int(line.Blocks[bi].Size), starts[bi])
-			key := mask.Text(10)
-			if _, exists := perBlockMasks[bi][key]; !exists {
-				perBlockMasks[bi][key] = mask
-			}
-		}
-	})
-
-	// Transfer unique masks into each block's list, sorted ascending for determinism.
+	// For each block, the set of possible starts is a contiguous range
+	// from startMin to startMin+freeSlots. Generate masks by shifting.
 	for bi := 0; bi < numBlocks; bi++ {
-		masks := make([]*big.Int, 0, len(perBlockMasks[bi]))
-		for _, m := range perBlockMasks[bi] {
-			masks = append(masks, m)
-		}
-		sort.Slice(masks, func(i, j int) bool { return masks[i].Cmp(masks[j]) < 0 })
-
 		lst := list.New()
-		for _, m := range masks {
-			// Store a copy to avoid accidental mutations later
-			lst.PushBack(new(big.Int).Set(m))
+		runLen := int(line.Blocks[bi].Size)
+		minStart := startMin[bi]
+		maxStart := minStart + freeSlots
+		for s := minStart; s <= maxStart; s++ {
+			lst.PushBack(makeRunMask(runLen, s))
 		}
 		line.Blocks[bi].Combinations = lst
 	}
@@ -112,22 +151,7 @@ func GenerateCombinationsForLine(line *types.Line) {
 
 // enumerateDistributions generates all non-negative integer vectors of length n
 // summing to total, invoking cb for each vector.
-func enumerateDistributions(n int, total int, cb func([]int)) {
-	current := make([]int, n)
-	var dfs func(idx int, remaining int)
-	dfs = func(idx int, remaining int) {
-		if idx == n-1 {
-			current[idx] = remaining
-			cb(current)
-			return
-		}
-		for v := 0; v <= remaining; v++ {
-			current[idx] = v
-			dfs(idx+1, remaining-v)
-		}
-	}
-	dfs(0, total)
-}
+// enumerateDistributions removed: no longer needed with shift-based generation
 
 // makeRunMask creates a bitmask with a contiguous run of 1s of length runLen
 // starting at bit position start (LSB at position 0).

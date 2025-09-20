@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	factory "nonogram-solver/factory"
 	network "nonogram-solver/network"
@@ -22,9 +23,12 @@ func main() {
 		return
 	}
 
+	start := time.Now()
 	lines := factory.CreateLines(*nonogramData)
-	factory.GenerateCombinationsForLines(&lines)
-	nonogramData.Print()
-	fmt.Println("\n=== GENERATED LINES ===")
-	lines.Print()
+	elapsed := time.Since(start)
+	fmt.Printf("GenerateCombinations generation included in line creation, time: %v\n", elapsed)
+	lines.Nothing()
+	// nonogramData.Print()
+	// fmt.Println("\n=== GENERATED LINES ===")
+	// lines.Print()
 }

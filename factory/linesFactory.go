@@ -1,7 +1,6 @@
 package factory
 
 import (
-	"container/list"
 	"nonogram-solver/types"
 )
 
@@ -21,7 +20,7 @@ func CreateLines(data types.NonogramData) types.Lines {
 			Index:     uint8(i),
 		}
 
-		line := createLineFromClues(data.RowClues[i], uint8(numCols))
+		line := createLineFromClues(data.RowClues[i], uint8(numCols), i)
 		lines.SetLine(lineID, line)
 	}
 
@@ -32,7 +31,7 @@ func CreateLines(data types.NonogramData) types.Lines {
 			Index:     uint8(i),
 		}
 
-		line := createLineFromClues(data.ColumnClues[i], uint8(numRows))
+		line := createLineFromClues(data.ColumnClues[i], uint8(numRows), i)
 		lines.SetLine(lineID, line)
 	}
 
@@ -40,14 +39,14 @@ func CreateLines(data types.NonogramData) types.Lines {
 }
 
 // createLineFromClues creates a Line from a slice of ClueItems and the line size
-func createLineFromClues(clues []types.ClueItem, size uint8) types.Line {
+func createLineFromClues(clues []types.ClueItem, size uint8, i int) types.Line {
 	blocks := make([]types.Block, len(clues))
 
-	for i, clue := range clues {
-		blocks[i] = types.Block{
+	for bi, clue := range clues {
+		blocks[bi] = types.Block{
 			ColorID:      clue.ColorID,
 			Size:         clue.BlockSize,
-			Combinations: list.New(),
+			Combinations: GenerateCombinations(clues, size, bi),
 		}
 	}
 
