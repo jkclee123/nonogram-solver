@@ -28,7 +28,7 @@ func createLinesSingleThreaded(data types.NonogramData) types.Lines {
 	numCols := len(data.ColumnClues)
 
 	// Create row lines
-	for i := 0; i < numRows; i++ {
+	for i := range numRows {
 		lineID := types.LineID{
 			Direction: types.Row,
 			Index:     uint8(i),
@@ -39,7 +39,7 @@ func createLinesSingleThreaded(data types.NonogramData) types.Lines {
 	}
 
 	// Create column lines
-	for i := 0; i < numCols; i++ {
+	for i := range numCols {
 		lineID := types.LineID{
 			Direction: types.Column,
 			Index:     uint8(i),
@@ -65,7 +65,7 @@ func createLinesWithGoroutines(data types.NonogramData) types.Lines {
 	var mu sync.Mutex
 
 	// Create row lines in parallel
-	for i := 0; i < numRows; i++ {
+	for i := range numRows {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
@@ -83,7 +83,7 @@ func createLinesWithGoroutines(data types.NonogramData) types.Lines {
 	}
 
 	// Create column lines in parallel
-	for i := 0; i < numCols; i++ {
+	for i := range numCols {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()

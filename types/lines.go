@@ -27,7 +27,3 @@ func (l *Lines) Print() {
 	}
 	fmt.Println("}")
 }
-
-func (l *Lines) Nothing() {
-	fmt.Println("Nothing")
-}
