@@ -134,6 +134,8 @@ func decodeNonogramData(rawData [][]int) (*types.NonogramData, error) {
 	return &types.NonogramData{
 		RowClues:    rowClues,
 		ColumnClues: colClues,
+		Width:       width,
+		Height:      height,
 		ColorMap:    colorMap,
 	}, nil
 }
@@ -283,28 +285,42 @@ func decodeGridCells(rawData [][]int, grid [][]int, width, height, numColors int
 }
 
 // extractAllClues generates row and column clues from the populated grid
-func extractAllClues(grid [][]int, width, height int) ([][]types.ClueItem, [][]types.ClueItem, error) {
+func extractAllClues(grid [][]int, width, height int) ([]types.LineClue, []types.LineClue, error) {
 	if len(grid) != height {
 		return nil, nil, fmt.Errorf("grid height mismatch: expected %d, got %d", height, len(grid))
 	}
 
 	// Extract row clues
-	rowClues := make([][]types.ClueItem, height)
+	rowClues := make([]types.LineClue, height)
 	for row := 0; row < height; row++ {
 		if len(grid[row]) != width {
 			return nil, nil, fmt.Errorf("grid row %d width mismatch: expected %d, got %d", row, width, len(grid[row]))
 		}
-		rowClues[row] = extractCluesFromRow(grid[row])
+		clues := extractCluesFromRow(grid[row])
+		rowClues[row] = types.LineClue{
+			Clues: clues,
+			LineID: types.LineID{
+				Direction: types.Row,
+				Index:     uint8(row),
+			},
+		}
 	}
 
 	// Extract column clues
-	colClues := make([][]types.ClueItem, width)
+	colClues := make([]types.LineClue, width)
 	for col := 0; col < width; col++ {
 		column := make([]int, height)
 		for row := 0; row < height; row++ {
 			column[row] = grid[row][col]
 		}
-		colClues[col] = extractCluesFromRow(column)
+		clues := extractCluesFromRow(column)
+		colClues[col] = types.LineClue{
+			Clues: clues,
+			LineID: types.LineID{
+				Direction: types.Column,
+				Index:     uint8(col),
+			},
+		}
 	}
 
 	return rowClues, colClues, nil

@@ -104,8 +104,9 @@ func createLinesWithGoroutines(data types.NonogramData) types.Lines {
 	return lines
 }
 
-// createLineFromClues creates a Line from a slice of ClueItems and the line size
-func createLineFromClues(clues []types.ClueItem, size int) types.Line {
+// createLineFromClues creates a Line from a LineClue and the line size
+func createLineFromClues(lineClue types.LineClue, size int) types.Line {
+	clues := lineClue.Clues
 	blocks := make([]types.Block, len(clues))
 
 	for i, clue := range clues {

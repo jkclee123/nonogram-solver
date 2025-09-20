@@ -3,8 +3,10 @@ package types
 import "fmt"
 
 type NonogramData struct {
-	RowClues    [][]ClueItem
-	ColumnClues [][]ClueItem
+	RowClues    []LineClue
+	ColumnClues []LineClue
+	Width       int
+	Height      int
 	ColorMap    map[int]string
 }
 
@@ -13,7 +15,7 @@ func (nd *NonogramData) Print() {
 	fmt.Printf("\n=== ROW CLUES ===\n")
 	for i, row := range nd.RowClues {
 		fmt.Printf("Row %d: ", i+1)
-		for j, clue := range row {
+		for j, clue := range row.Clues {
 			if j > 0 {
 				fmt.Printf(", ")
 			}
@@ -25,7 +27,7 @@ func (nd *NonogramData) Print() {
 	fmt.Printf("\n=== COLUMN CLUES ===\n")
 	for i, col := range nd.ColumnClues {
 		fmt.Printf("Col %d: ", i+1)
-		for j, clue := range col {
+		for j, clue := range col.Clues {
 			if j > 0 {
 				fmt.Printf(", ")
 			}
