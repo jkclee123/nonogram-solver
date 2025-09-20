@@ -1,11 +1,25 @@
 package factory
 
 import (
+	"sync"
+
 	"nonogram-solver/types"
 )
 
 // CreateLines takes NonogramData and creates Lines containing all row and column lines
 func CreateLines(data types.NonogramData) types.Lines {
+	totalLines := len(data.RowClues) + len(data.ColumnClues)
+
+	// Use goroutines when total line count is 50 or more
+	if totalLines >= 50 {
+		return createLinesWithGoroutines(data)
+	}
+
+	return createLinesSingleThreaded(data)
+}
+
+// createLinesSingleThreaded creates lines using single-threaded approach
+func createLinesSingleThreaded(data types.NonogramData) types.Lines {
 	lines := types.Lines{
 		Lines: make(map[types.LineID]types.Line),
 	}
@@ -35,6 +49,58 @@ func CreateLines(data types.NonogramData) types.Lines {
 		lines.SetLine(lineID, line)
 	}
 
+	return lines
+}
+
+// createLinesWithGoroutines creates lines using goroutines for parallel processing
+func createLinesWithGoroutines(data types.NonogramData) types.Lines {
+	lines := types.Lines{
+		Lines: make(map[types.LineID]types.Line),
+	}
+
+	numRows := len(data.RowClues)
+	numCols := len(data.ColumnClues)
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	// Create row lines in parallel
+	for i := 0; i < numRows; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			lineID := types.LineID{
+				Direction: types.Row,
+				Index:     uint8(index),
+			}
+
+			line := createLineFromClues(data.RowClues[index], uint8(numCols))
+
+			mu.Lock()
+			lines.SetLine(lineID, line)
+			mu.Unlock()
+		}(i)
+	}
+
+	// Create column lines in parallel
+	for i := 0; i < numCols; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			lineID := types.LineID{
+				Direction: types.Column,
+				Index:     uint8(index),
+			}
+
+			line := createLineFromClues(data.ColumnClues[index], uint8(numRows))
+
+			mu.Lock()
+			lines.SetLine(lineID, line)
+			mu.Unlock()
+		}(i)
+	}
+
+	wg.Wait()
 	return lines
 }
 
