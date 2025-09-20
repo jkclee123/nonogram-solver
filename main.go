@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	fetcher "nonogram-solver/internal"
+	factory "nonogram-solver/factory"
+	network "nonogram-solver/network"
 )
 
 func main() {
@@ -15,12 +16,15 @@ func main() {
 	nonogramID := os.Args[1]
 
 	// Fetch and parse the nonogram data
-	data, err := fetcher.FetchNonogramData(nonogramID)
+	nonogramData, err := network.FetchNonogramData(nonogramID)
 	if err != nil {
 		fmt.Printf("Error fetching nonogram data: %v\n", err)
 		return
 	}
 
-	fmt.Printf("Successfully fetched and parsed nonogram data!\n")
-	data.Print()
+	lines := factory.CreateLines(*nonogramData)
+	factory.GenerateCombinationsForLines(&lines)
+	nonogramData.Print()
+	fmt.Println("\n=== GENERATED LINES ===")
+	lines.Print()
 }

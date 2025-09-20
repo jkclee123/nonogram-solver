@@ -1,12 +1,17 @@
 package types
 
 import (
+	"fmt"
 	"math/big"
 )
 
 type Line struct {
 	Blocks []Block
 	Size   uint8
+}
+
+func IsSameColor(l *Line, index uint8, index2 uint8) bool {
+	return l.Blocks[index].ColorID == l.Blocks[index2].ColorID
 }
 
 func (l *Line) CheckCommonCombinations() map[uint8][]uint8 {
@@ -84,4 +89,16 @@ func (l *Line) CheckCommonEmptyCell() []uint8 {
 	}
 
 	return result
+}
+
+// Print prints the line information in a readable format
+func (l *Line) Print() {
+	fmt.Printf("Line{Size: %d, Blocks: [", l.Size)
+	for i, block := range l.Blocks {
+		if i > 0 {
+			fmt.Print(", ")
+		}
+		fmt.Printf("Block{ColorID: %d, Size: %d}", block.ColorID, block.Size)
+	}
+	fmt.Println("]}")
 }
