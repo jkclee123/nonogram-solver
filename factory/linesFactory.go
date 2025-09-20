@@ -8,10 +8,8 @@ import (
 
 // CreateLines takes NonogramData and creates Lines containing all row and column lines
 func CreateLines(data types.NonogramData) types.Lines {
-	totalLines := len(data.RowClues) + len(data.ColumnClues)
-
 	// Use goroutines when total line count is 50 or more
-	if totalLines >= 50 {
+	if len(data.Clues) >= 50 {
 		return createLinesWithGoroutines(data)
 	}
 
@@ -24,29 +22,13 @@ func createLinesSingleThreaded(data types.NonogramData) types.Lines {
 		Lines: make(map[types.LineID]types.Line),
 	}
 
-	numRows := len(data.RowClues)
-	numCols := len(data.ColumnClues)
-
-	// Create row lines
-	for i := range numRows {
-		lineID := types.LineID{
-			Direction: types.Row,
-			Index:     uint8(i),
+	for i := range data.Clues {
+		lineID := data.Clues[i].LineID
+		if lineID.Direction == types.Row {
+			lines.SetLine(lineID, createLineFromClues(data.Clues[i], data.Width))
+		} else {
+			lines.SetLine(lineID, createLineFromClues(data.Clues[i], data.Height))
 		}
-
-		line := createLineFromClues(data.RowClues[i], numCols)
-		lines.SetLine(lineID, line)
-	}
-
-	// Create column lines
-	for i := range numCols {
-		lineID := types.LineID{
-			Direction: types.Column,
-			Index:     uint8(i),
-		}
-
-		line := createLineFromClues(data.ColumnClues[i], numRows)
-		lines.SetLine(lineID, line)
 	}
 
 	return lines
@@ -58,41 +40,23 @@ func createLinesWithGoroutines(data types.NonogramData) types.Lines {
 		Lines: make(map[types.LineID]types.Line),
 	}
 
-	numRows := len(data.RowClues)
-	numCols := len(data.ColumnClues)
-
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	// Create row lines in parallel
-	for i := range numRows {
+	// Process all clues in parallel goroutines
+	for i := range data.Clues {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			lineID := types.LineID{
-				Direction: types.Row,
-				Index:     uint8(index),
+			clue := data.Clues[index]
+			lineID := clue.LineID
+
+			var line types.Line
+			if lineID.Direction == types.Row {
+				line = createLineFromClues(clue, data.Width)
+			} else {
+				line = createLineFromClues(clue, data.Height)
 			}
-
-			line := createLineFromClues(data.RowClues[index], numCols)
-
-			mu.Lock()
-			lines.SetLine(lineID, line)
-			mu.Unlock()
-		}(i)
-	}
-
-	// Create column lines in parallel
-	for i := range numCols {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
-			lineID := types.LineID{
-				Direction: types.Column,
-				Index:     uint8(index),
-			}
-
-			line := createLineFromClues(data.ColumnClues[index], numRows)
 
 			mu.Lock()
 			lines.SetLine(lineID, line)

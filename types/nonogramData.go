@@ -3,18 +3,30 @@ package types
 import "fmt"
 
 type NonogramData struct {
-	RowClues    []LineClue
-	ColumnClues []LineClue
-	Width       int
-	Height      int
-	ColorMap    map[int]string
+	Clues    []LineClue
+	Width    int
+	Height   int
+	ColorMap map[int]string
 }
 
 // Print displays the parsed nonogram clues in a readable format
 func (nd *NonogramData) Print() {
+	// Separate row and column clues
+	rowClues := make([]LineClue, 0)
+	columnClues := make([]LineClue, 0)
+
+	for _, clue := range nd.Clues {
+		switch clue.LineID.Direction {
+		case Row:
+			rowClues = append(rowClues, clue)
+		case Column:
+			columnClues = append(columnClues, clue)
+		}
+	}
+
 	fmt.Printf("\n=== ROW CLUES ===\n")
-	for i, row := range nd.RowClues {
-		fmt.Printf("Row %d: ", i+1)
+	for _, row := range rowClues {
+		fmt.Printf("Row %d: ", row.LineID.Index+1)
 		for j, clue := range row.Clues {
 			if j > 0 {
 				fmt.Printf(", ")
@@ -25,8 +37,8 @@ func (nd *NonogramData) Print() {
 	}
 
 	fmt.Printf("\n=== COLUMN CLUES ===\n")
-	for i, col := range nd.ColumnClues {
-		fmt.Printf("Col %d: ", i+1)
+	for _, col := range columnClues {
+		fmt.Printf("Col %d: ", col.LineID.Index+1)
 		for j, clue := range col.Clues {
 			if j > 0 {
 				fmt.Printf(", ")
@@ -45,5 +57,5 @@ func (nd *NonogramData) Print() {
 		fmt.Printf("No colors found\n")
 	}
 
-	fmt.Printf("\nGrid size: %dx%d\n", len(nd.ColumnClues), len(nd.RowClues))
+	fmt.Printf("\nGrid size: %dx%d\n", len(columnClues), len(rowClues))
 }

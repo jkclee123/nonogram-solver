@@ -131,12 +131,16 @@ func decodeNonogramData(rawData [][]int) (*types.NonogramData, error) {
 		return nil, fmt.Errorf("failed to extract clues: %w", err)
 	}
 
+	// Combine row and column clues into a single slice
+	allClues := make([]types.LineClue, 0, len(rowClues)+len(colClues))
+	allClues = append(allClues, rowClues...)
+	allClues = append(allClues, colClues...)
+
 	return &types.NonogramData{
-		RowClues:    rowClues,
-		ColumnClues: colClues,
-		Width:       width,
-		Height:      height,
-		ColorMap:    colorMap,
+		Clues:    allClues,
+		Width:    width,
+		Height:   height,
+		ColorMap: colorMap,
 	}, nil
 }
 
