@@ -115,11 +115,10 @@ func decodeNonogramData(rawData [][]int) (*types.NonogramData, error) {
 	grid := initializeGrid(width, height)
 
 	// Decode color information
-	colors, err := decodeColorData(rawData, numColors)
+	colorMap, err := decodeColorData(rawData, numColors)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode color data: %w", err)
 	}
-	_ = colors // Colors not currently used in final output but decoded for completeness
 
 	// Decode grid cell data
 	if err := decodeGridCells(rawData, grid, width, height, numColors); err != nil {
@@ -135,6 +134,7 @@ func decodeNonogramData(rawData [][]int) (*types.NonogramData, error) {
 	return &types.NonogramData{
 		RowClues:    rowClues,
 		ColumnClues: colClues,
+		ColorMap:    colorMap,
 	}, nil
 }
 
@@ -192,12 +192,12 @@ func initializeGrid(width, height int) [][]int {
 }
 
 // decodeColorData extracts color information from the raw data
-func decodeColorData(rawData [][]int, numColors int) ([][2]int, error) {
+func decodeColorData(rawData [][]int, numColors int) (map[int]string, error) {
 	if len(rawData) < colorOffset+numColors {
 		return nil, fmt.Errorf("insufficient data for %d colors", numColors)
 	}
 
-	colors := make([][2]int, numColors)
+	colorMap := make(map[int]string)
 	colorBaseData := rawData[gridDataIndex]
 
 	for i := 0; i < numColors; i++ {
@@ -211,14 +211,21 @@ func decodeColorData(rawData [][]int, numColors int) ([][2]int, error) {
 			continue
 		}
 
-		// Decode color value and additional parameter based on JavaScript implementation
+		// Decode color value based on JavaScript implementation
 		colorValueOffset := colorData[dataValueIndex] - colorBaseData[dataOffsetIndex]
-		colorParameter := colorData[dataMultiplierIndex] - colorValueOffset - colorBaseData[dataModulusIndex]
+		colorValue := colorValueOffset + colorBaseValue
 
-		colors[i] = [2]int{colorValueOffset + colorBaseValue, colorParameter}
+		// Convert RGB value to hex format
+		// Color value is typically in the format 0xRRGGBB
+		r := (colorValue >> 16) & 0xFF
+		g := (colorValue >> 8) & 0xFF
+		b := colorValue & 0xFF
+
+		hexColor := fmt.Sprintf("#%02X%02X%02X", r, g, b)
+		colorMap[i+1] = hexColor // Color IDs start from 1
 	}
 
-	return colors, nil
+	return colorMap, nil
 }
 
 // decodeGridCells populates the grid with cell data from the raw encoded format
@@ -320,7 +327,7 @@ func extractCluesFromRow(row []int) []types.ClueItem {
 				// Color changed, save previous block if it exists
 				if currentCount > 0 {
 					clues = append(clues, types.ClueItem{
-						Color:     uint8(currentColor),
+						ColorID:   uint8(currentColor),
 						BlockSize: uint8(currentCount),
 					})
 				}
@@ -332,7 +339,7 @@ func extractCluesFromRow(row []int) []types.ClueItem {
 			if currentCount > 0 {
 				// End current block
 				clues = append(clues, types.ClueItem{
-					Color:     uint8(currentColor),
+					ColorID:   uint8(currentColor),
 					BlockSize: uint8(currentCount),
 				})
 				// Reset for next block
@@ -345,7 +352,7 @@ func extractCluesFromRow(row []int) []types.ClueItem {
 	// Add the final block if one was in progress
 	if currentCount > 0 {
 		clues = append(clues, types.ClueItem{
-			Color:     uint8(currentColor),
+			ColorID:   uint8(currentColor),
 			BlockSize: uint8(currentCount),
 		})
 	}

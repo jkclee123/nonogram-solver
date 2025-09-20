@@ -1,6 +1,6 @@
 package types
 
 type ClueItem struct {
-	Color     uint8
+	ColorID   uint8
 	BlockSize uint8
 }

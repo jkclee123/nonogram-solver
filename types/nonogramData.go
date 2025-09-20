@@ -5,6 +5,7 @@ import "fmt"
 type NonogramData struct {
 	RowClues    [][]ClueItem
 	ColumnClues [][]ClueItem
+	ColorMap    map[int]string
 }
 
 // Print displays the parsed nonogram clues in a readable format
@@ -16,7 +17,7 @@ func (nd *NonogramData) Print() {
 			if j > 0 {
 				fmt.Printf(", ")
 			}
-			fmt.Printf("(%d,%d)", clue.Color, clue.BlockSize)
+			fmt.Printf("(%d,%d)", clue.ColorID, clue.BlockSize)
 		}
 		fmt.Printf("\n")
 	}
@@ -28,9 +29,18 @@ func (nd *NonogramData) Print() {
 			if j > 0 {
 				fmt.Printf(", ")
 			}
-			fmt.Printf("(%d,%d)", clue.Color, clue.BlockSize)
+			fmt.Printf("(%d,%d)", clue.ColorID, clue.BlockSize)
 		}
 		fmt.Printf("\n")
+	}
+
+	fmt.Printf("\n=== COLOR MAP ===\n")
+	if len(nd.ColorMap) > 0 {
+		for colorID, hexColor := range nd.ColorMap {
+			fmt.Printf("Color %d: %s\n", colorID, hexColor)
+		}
+	} else {
+		fmt.Printf("No colors found\n")
 	}
 
 	fmt.Printf("\nGrid size: %dx%d\n", len(nd.ColumnClues), len(nd.RowClues))
