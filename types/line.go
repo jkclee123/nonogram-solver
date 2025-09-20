@@ -36,10 +36,8 @@ func (l *Line) CheckCommonFillCell() map[uint8][]uint8 {
 			}
 		}
 
-		for e := block.Combinations.Front(); e != nil; e = e.Next() {
-			if combination, ok := e.Value.(*big.Int); ok {
-				commonColor.And(commonColor, combination)
-			}
+		for _, combination := range block.Combinations {
+			commonColor.And(commonColor, combination)
 		}
 		commonColorMap[block.ColorID] = commonColor
 	}
@@ -72,10 +70,8 @@ func (l *Line) CheckCommonEmptyCell() []uint8 {
 
 	commonEmpty := big.NewInt(0)
 	for _, block := range l.Blocks {
-		for e := block.Combinations.Front(); e != nil; e = e.Next() {
-			if combination, ok := e.Value.(*big.Int); ok {
-				commonEmpty.Or(commonEmpty, combination)
-			}
+		for _, combination := range block.Combinations {
+			commonEmpty.Or(commonEmpty, combination)
 		}
 	}
 

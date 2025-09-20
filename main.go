@@ -26,9 +26,7 @@ func main() {
 	start := time.Now()
 	lines := factory.CreateLines(*nonogramData)
 	elapsed := time.Since(start)
+	fmt.Println("\n=== GENERATED LINES ===")
+	lines.Print()
 	fmt.Printf("GenerateCombinations generation included in line creation, time: %v\n", elapsed)
-	lines.Nothing()
-	// nonogramData.Print()
-	// fmt.Println("\n=== GENERATED LINES ===")
-	// lines.Print()
 }

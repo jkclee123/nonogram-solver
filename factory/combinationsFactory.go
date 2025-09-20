@@ -1,7 +1,6 @@
 package factory
 
 import (
-	"container/list"
 	"math/big"
 
 	"nonogram-solver/types"
@@ -11,9 +10,9 @@ import (
 // described by clues within a line of given size. It honors color adjacency rules:
 // adjacent blocks with the same color require at least one empty cell between them;
 // blocks with different colors can be adjacent without an empty cell.
-func GenerateCombinations(clues []types.ClueItem, size uint8, i int) *list.List {
+func GenerateCombinations(clues []types.ClueItem, size uint8, i int) []*big.Int {
 	if size == 0 || len(clues) == 0 || i < 0 || i >= len(clues) {
-		return list.New()
+		return []*big.Int{}
 	}
 
 	numBlocks := len(clues)
@@ -41,7 +40,7 @@ func GenerateCombinations(clues []types.ClueItem, size uint8, i int) *list.List 
 	lineSize := int(size)
 	minRequired := sizesSum + minGapSum
 	if minRequired > lineSize {
-		return list.New()
+		return []*big.Int{}
 	}
 
 	freeSlots := lineSize - minRequired
@@ -58,14 +57,14 @@ func GenerateCombinations(clues []types.ClueItem, size uint8, i int) *list.List 
 	}
 
 	// Generate masks for the i-th block by shifting across the free slots.
-	lst := list.New()
+	var result []*big.Int
 	runLen := int(clues[i].BlockSize)
 	minStart := startMin[i]
 	maxStart := minStart + freeSlots
 	for s := minStart; s <= maxStart; s++ {
-		lst.PushBack(makeRunMask(runLen, s))
+		result = append(result, makeRunMask(runLen, s))
 	}
-	return lst
+	return result
 }
 
 // GenerateCombinationsForLines populates combinations for every line in the collection.
@@ -116,7 +115,7 @@ func GenerateCombinationsForLine(line *types.Line) {
 	if minRequired > lineSize {
 		// Impossible line; leave combinations empty.
 		for i := 0; i < numBlocks; i++ {
-			line.Blocks[i].Combinations = list.New()
+			line.Blocks[i].Combinations = []*big.Int{}
 		}
 		return
 	}
@@ -138,14 +137,14 @@ func GenerateCombinationsForLine(line *types.Line) {
 	// For each block, the set of possible starts is a contiguous range
 	// from startMin to startMin+freeSlots. Generate masks by shifting.
 	for bi := 0; bi < numBlocks; bi++ {
-		lst := list.New()
+		var combinations []*big.Int
 		runLen := int(line.Blocks[bi].Size)
 		minStart := startMin[bi]
 		maxStart := minStart + freeSlots
 		for s := minStart; s <= maxStart; s++ {
-			lst.PushBack(makeRunMask(runLen, s))
+			combinations = append(combinations, makeRunMask(runLen, s))
 		}
-		line.Blocks[bi].Combinations = lst
+		line.Blocks[bi].Combinations = combinations
 	}
 }
 
