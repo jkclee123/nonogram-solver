@@ -10,7 +10,7 @@ import (
 // described by clues within a line of given size. It honors color adjacency rules:
 // adjacent blocks with the same color require at least one empty cell between them;
 // blocks with different colors can be adjacent without an empty cell.
-func GenerateCombinations(clues []types.ClueItem, size uint8, i int) []*big.Int {
+func GenerateCombinations(clues []types.ClueItem, size int, i int) []*big.Int {
 	if size == 0 || len(clues) == 0 || i < 0 || i >= len(clues) {
 		return []*big.Int{}
 	}

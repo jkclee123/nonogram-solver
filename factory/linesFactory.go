@@ -34,7 +34,7 @@ func createLinesSingleThreaded(data types.NonogramData) types.Lines {
 			Index:     uint8(i),
 		}
 
-		line := createLineFromClues(data.RowClues[i], uint8(numCols))
+		line := createLineFromClues(data.RowClues[i], numCols)
 		lines.SetLine(lineID, line)
 	}
 
@@ -45,7 +45,7 @@ func createLinesSingleThreaded(data types.NonogramData) types.Lines {
 			Index:     uint8(i),
 		}
 
-		line := createLineFromClues(data.ColumnClues[i], uint8(numRows))
+		line := createLineFromClues(data.ColumnClues[i], numRows)
 		lines.SetLine(lineID, line)
 	}
 
@@ -74,7 +74,7 @@ func createLinesWithGoroutines(data types.NonogramData) types.Lines {
 				Index:     uint8(index),
 			}
 
-			line := createLineFromClues(data.RowClues[index], uint8(numCols))
+			line := createLineFromClues(data.RowClues[index], numCols)
 
 			mu.Lock()
 			lines.SetLine(lineID, line)
@@ -92,7 +92,7 @@ func createLinesWithGoroutines(data types.NonogramData) types.Lines {
 				Index:     uint8(index),
 			}
 
-			line := createLineFromClues(data.ColumnClues[index], uint8(numRows))
+			line := createLineFromClues(data.ColumnClues[index], numRows)
 
 			mu.Lock()
 			lines.SetLine(lineID, line)
@@ -105,7 +105,7 @@ func createLinesWithGoroutines(data types.NonogramData) types.Lines {
 }
 
 // createLineFromClues creates a Line from a slice of ClueItems and the line size
-func createLineFromClues(clues []types.ClueItem, size uint8) types.Line {
+func createLineFromClues(clues []types.ClueItem, size int) types.Line {
 	blocks := make([]types.Block, len(clues))
 
 	for i, clue := range clues {

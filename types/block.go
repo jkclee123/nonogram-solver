@@ -34,7 +34,7 @@ func (b *Block) Print() {
 }
 
 // PrintWithWidth prints the block and its combinations, padding bitmasks to the given width.
-func (b *Block) PrintWithWidth(width uint8) {
+func (b *Block) PrintWithWidth(width int) {
 	fmt.Printf("Block{ColorID: %d, Size: %d", b.ColorID, b.Size)
 	if len(b.Combinations) > 0 {
 		fmt.Printf(", Combinations: %d total", len(b.Combinations))
@@ -46,7 +46,7 @@ func (b *Block) PrintWithWidth(width uint8) {
 			}
 			// Render bits left-to-right with cell index == bit index.
 			// Position 0 (leftmost) corresponds to bit 0, etc.
-			w := int(width)
+			w := width
 			builder := make([]byte, w)
 			for pos := 0; pos < w; pos++ {
 				if combination.Bit(pos) == 1 {

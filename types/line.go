@@ -7,46 +7,34 @@ import (
 
 type Line struct {
 	Blocks []Block
-	Size   uint8
+	Size   int
 }
 
 func IsSameColor(l *Line, index uint8, index2 uint8) bool {
 	return l.Blocks[index].ColorID == l.Blocks[index2].ColorID
 }
 
-func (l *Line) CheckCommonCombinations() map[uint8][]uint8 {
+func (l *Line) CheckCommonCombinations() map[uint8]*big.Int {
 	result := l.CheckCommonFillCell()
 	result[0] = l.CheckCommonEmptyCell()
 	return result
 }
 
 // CheckCommonFillCell finds cells that must be filled with a specific color across all valid combinations.
-// For each color, it performs bitwise AND on all combinations to find positions that are consistently filled.
-// Returns a map where keys are color IDs and values are slices of cell positions that must be that color.
-func (l *Line) CheckCommonFillCell() map[uint8][]uint8 {
-	result := make(map[uint8][]uint8)
-	commonColorMap := make(map[uint8]*big.Int)
+// For each color, it performs bitwise AND on all combinations within each block to find positions
+// that are consistently filled in every combination of that block, then ORs these results together.
+// Returns a map where keys are color IDs and values are big.Int bitmasks where 1 bits represent
+// positions that must be filled with that color in every valid combination.
+func (l *Line) CheckCommonFillCell() map[uint8]*big.Int {
+	result := make(map[uint8]*big.Int)
 
 	for _, block := range l.Blocks {
-		commonColor, exists := commonColorMap[block.ColorID]
-		if !exists {
-			commonColor = big.NewInt(0)
-			for i := 0; i < int(l.Size); i++ {
-				commonColor.SetBit(commonColor, i, 1)
+		commonFill := BitwiseAnd(&block)
+		if commonFill.Cmp(big.NewInt(0)) != 0 {
+			if result[block.ColorID] == nil {
+				result[block.ColorID] = big.NewInt(0)
 			}
-		}
-
-		for _, combination := range block.Combinations {
-			commonColor.And(commonColor, combination)
-		}
-		commonColorMap[block.ColorID] = commonColor
-	}
-
-	for colorID, commonColor := range commonColorMap {
-		for i := 0; i < int(l.Size); i++ {
-			if commonColor.Bit(i) == 1 {
-				result[colorID] = append(result[colorID], uint8(i))
-			}
+			result[block.ColorID].Or(result[block.ColorID], commonFill)
 		}
 	}
 
@@ -55,33 +43,43 @@ func (l *Line) CheckCommonFillCell() map[uint8][]uint8 {
 
 // CheckCommonEmptyCell finds cells that must remain empty across all valid combinations.
 // If there are no blocks, all cells must be empty.
-// Otherwise, it performs bitwise OR on all combinations from all blocks
-// positions with 0 bits are cells that must be empty in every valid combination.
-// Returns a slice of cell positions that must be empty.
-func (l *Line) CheckCommonEmptyCell() []uint8 {
-	var result []uint8
+// Otherwise, for each block it performs bitwise OR on all combinations within that block,
+// then ORs these results together across all blocks, and finally inverts the result.
+// Returns a big.Int bitmask where 1 bits represent positions that must be empty
+// in every valid combination (cells that are never filled in any combination).
+func (l *Line) CheckCommonEmptyCell() *big.Int {
+	mask := big.NewInt(0).Sub(big.NewInt(0).Lsh(big.NewInt(1), uint(l.Size)), big.NewInt(1))
+
 	if len(l.Blocks) == 0 {
-		// return range from 0 to size - 1
-		for i := uint8(0); i < l.Size; i++ {
-			result = append(result, i)
-		}
-		return result
+		// Return a big int with bits from 0 to size-1 set to 1
+		return mask
 	}
 
 	commonEmpty := big.NewInt(0)
 	for _, block := range l.Blocks {
-		for _, combination := range block.Combinations {
-			commonEmpty.Or(commonEmpty, combination)
-		}
+		commonEmpty.Or(commonEmpty, BitwiseOr(&block))
 	}
 
-	// Find positions of 0 bits (common empty cells)
-	for i := 0; i < int(l.Size); i++ {
-		if commonEmpty.Bit(i) == 0 {
-			result = append(result, uint8(i))
-		}
-	}
+	// Flip all bits using XOR with a full mask
+	result := big.NewInt(0)
+	result.Xor(commonEmpty, mask)
 
+	return result
+}
+
+func BitwiseOr(block *Block) *big.Int {
+	result := big.NewInt(0)
+	for _, combination := range block.Combinations {
+		result.Or(result, combination)
+	}
+	return result
+}
+
+func BitwiseAnd(block *Block) *big.Int {
+	result := big.NewInt(0)
+	for _, combination := range block.Combinations {
+		result.And(result, combination)
+	}
 	return result
 }
 
