@@ -48,7 +48,9 @@ func (l *Line) CheckCommonFillCell() map[uint8]*big.Int {
 // Returns a big.Int bitmask where 1 bits represent positions that must be empty
 // in every valid combination (cells that are never filled in any combination).
 func (l *Line) CheckCommonEmptyCell() *big.Int {
-	mask := big.NewInt(0).Sub(big.NewInt(0).Lsh(big.NewInt(1), uint(l.Size)), big.NewInt(1))
+	mask := big.NewInt(1)
+	mask.Lsh(mask, uint(l.Size))
+	mask.Sub(mask, big.NewInt(1))
 
 	if len(l.Blocks) == 0 {
 		// Return a big int with bits from 0 to size-1 set to 1
@@ -60,11 +62,8 @@ func (l *Line) CheckCommonEmptyCell() *big.Int {
 		commonEmpty.Or(commonEmpty, bitwiseOr(&block))
 	}
 
-	// Flip all bits using XOR with a full mask
-	result := big.NewInt(0)
-	result.Xor(commonEmpty, mask)
-
-	return result
+	commonEmpty.Xor(commonEmpty, mask)
+	return commonEmpty
 }
 
 func bitwiseOr(block *Block) *big.Int {
