@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	fetcher "nonogram-solver/internal"
 )
 
 func main() {
@@ -12,13 +14,13 @@ func main() {
 	}
 	nonogramID := os.Args[1]
 
-	// Fetch the nonogram data
-	data, err := FetchPage(nonogramID)
+	// Fetch and parse the nonogram data
+	data, err := fetcher.FetchNonogramData(nonogramID)
 	if err != nil {
 		fmt.Printf("Error fetching nonogram data: %v\n", err)
 		return
 	}
 
-	fmt.Printf("Successfully fetched nonogram data %s \n", data)
-	// TODO: Parse the data into NonogramData struct
+	fmt.Printf("Successfully fetched and parsed nonogram data!\n")
+	data.Print()
 }
