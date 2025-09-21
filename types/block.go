@@ -33,6 +33,26 @@ func (b *Block) Print() {
 	fmt.Println("}")
 }
 
+// BitwiseOr performs bitwise OR on all combinations within this block.
+// Returns a big.Int where each bit represents the OR result across all combinations.
+func (b *Block) BitwiseOr() *big.Int {
+	result := big.NewInt(0)
+	for _, combination := range b.Combinations {
+		result.Or(result, combination)
+	}
+	return result
+}
+
+// BitwiseAnd performs bitwise AND on all combinations within this block.
+// Returns a big.Int where each bit represents the AND result across all combinations.
+func (b *Block) BitwiseAnd() *big.Int {
+	result := big.NewInt(0)
+	for _, combination := range b.Combinations {
+		result.And(result, combination)
+	}
+	return result
+}
+
 // PrintWithWidth prints the block and its combinations, padding bitmasks to the given width.
 func (b *Block) PrintWithWidth(width int) {
 	fmt.Printf("Block{ColorID: %d, Size: %d", b.ColorID, b.Size)

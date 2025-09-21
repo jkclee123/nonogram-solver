@@ -29,7 +29,7 @@ func (l *Line) CheckCommonFillCell() map[uint8]*big.Int {
 	result := make(map[uint8]*big.Int)
 
 	for _, block := range l.Blocks {
-		commonFill := bitwiseAnd(&block)
+		commonFill := block.BitwiseAnd()
 		if commonFill.Cmp(big.NewInt(0)) != 0 {
 			if result[block.ColorID] == nil {
 				result[block.ColorID] = big.NewInt(0)
@@ -59,27 +59,11 @@ func (l *Line) CheckCommonEmptyCell() *big.Int {
 
 	commonEmpty := big.NewInt(0)
 	for _, block := range l.Blocks {
-		commonEmpty.Or(commonEmpty, bitwiseOr(&block))
+		commonEmpty.Or(commonEmpty, block.BitwiseOr())
 	}
 
 	commonEmpty.Xor(commonEmpty, mask)
 	return commonEmpty
-}
-
-func bitwiseOr(block *Block) *big.Int {
-	result := big.NewInt(0)
-	for _, combination := range block.Combinations {
-		result.Or(result, combination)
-	}
-	return result
-}
-
-func bitwiseAnd(block *Block) *big.Int {
-	result := big.NewInt(0)
-	for _, combination := range block.Combinations {
-		result.And(result, combination)
-	}
-	return result
 }
 
 // Print prints the line information in a readable format
