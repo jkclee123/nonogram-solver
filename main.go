@@ -6,6 +6,7 @@ import (
 	"time"
 
 	network "nonogram-solver/network"
+	factory"nonogram-solver/factory"
 )
 
 func main() {
@@ -26,6 +27,9 @@ func main() {
 	}
 
 	// Print the parsed data
-	nonogramData.Print()
+	// nonogramData.Print()
+
+	grid := factory.CreateGrid(*nonogramData)
+	grid.Print()
 
 }
