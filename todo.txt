@@ -1,0 +1,4 @@
+
+complete gridFactory
+complete combinationsFactory
+test fetcher FetchNonogramData

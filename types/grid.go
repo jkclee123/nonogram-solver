@@ -3,7 +3,7 @@ package types
 import (
 )
 
-type Lines struct {
+type Grid struct {
 	Lines map[LineID]Line
 	Width int
 	Height int
