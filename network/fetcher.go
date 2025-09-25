@@ -178,18 +178,13 @@ func decodeNonogramData(rawData [][]int) (*types.NonogramData, error) {
 	}
 
 	// Extract clues from the populated grid
-	rowClues, colClues, err := extractAllClues(grid, width, height)
+	clues, err := extractAllClues(grid, width, height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract clues: %w", err)
 	}
 
-	// Combine row and column clues into a single slice
-	allClues := make([]types.LineClue, 0, len(rowClues)+len(colClues))
-	allClues = append(allClues, rowClues...)
-	allClues = append(allClues, colClues...)
-
 	return &types.NonogramData{
-		Clues:    allClues,
+		Clues:    clues,
 		Width:    width,
 		Height:   height,
 		ColorMap: colorMap,
@@ -269,17 +264,22 @@ func decodeColorData(rawData [][]int, numColors int) (map[int]string, error) {
 			continue
 		}
 
-		// Decode color value based on JavaScript implementation
-		colorValueOffset := colorData[dataValueIndex] - colorBaseData[dataOffsetIndex]
-		colorValue := colorValueOffset + colorBaseValue
+		var hexColor string
+		if numColors == 1 {
+			hexColor = "#000000"
+		} else {
+			// Decode color value based on JavaScript implementation
+			colorValueOffset := colorData[dataValueIndex] - colorBaseData[dataOffsetIndex]
+			colorValue := colorValueOffset + colorBaseValue
 
-		// Convert RGB value to hex format
-		// Color value is typically in the format 0xRRGGBB
-		r := (colorValue >> 16) & 0xFF
-		g := (colorValue >> 8) & 0xFF
-		b := colorValue & 0xFF
+			// Convert RGB value to hex format
+			// Color value is typically in the format 0xRRGGBB
+			r := (colorValue >> 16) & 0xFF
+			g := (colorValue >> 8) & 0xFF
+			b := colorValue & 0xFF
 
-		hexColor := fmt.Sprintf("#%02X%02X%02X", r, g, b)
+			hexColor = fmt.Sprintf("#%02X%02X%02X", r, g, b)
+		}
 		colorMap[i+1] = hexColor // Color IDs start from 1
 	}
 
@@ -341,45 +341,41 @@ func decodeGridCells(rawData [][]int, grid [][]int, width, height, numColors int
 }
 
 // extractAllClues generates row and column clues from the populated grid
-func extractAllClues(grid [][]int, width, height int) ([]types.LineClue, []types.LineClue, error) {
+func extractAllClues(grid [][]int, width, height int) (map[types.LineID][]types.ClueItem, error) {
 	if len(grid) != height {
-		return nil, nil, fmt.Errorf("grid height mismatch: expected %d, got %d", height, len(grid))
+		return nil, fmt.Errorf("grid height mismatch: expected %d, got %d", height, len(grid))
 	}
 
+	clues := make(map[types.LineID][]types.ClueItem)
+
 	// Extract row clues
-	rowClues := make([]types.LineClue, height)
 	for row := 0; row < height; row++ {
 		if len(grid[row]) != width {
-			return nil, nil, fmt.Errorf("grid row %d width mismatch: expected %d, got %d", row, width, len(grid[row]))
+			return nil, fmt.Errorf("grid row %d width mismatch: expected %d, got %d", row, width, len(grid[row]))
 		}
-		clues := extractCluesFromRow(grid[row])
-		rowClues[row] = types.LineClue{
-			Clues: clues,
-			LineID: types.LineID{
-				Direction: types.Row,
-				Index:     uint8(row),
-			},
+		clueItems := extractCluesFromRow(grid[row])
+		lineID := types.LineID{
+			Direction: types.Row,
+			Index:     row,
 		}
+		clues[lineID] = clueItems
 	}
 
 	// Extract column clues
-	colClues := make([]types.LineClue, width)
 	for col := 0; col < width; col++ {
 		column := make([]int, height)
 		for row := 0; row < height; row++ {
 			column[row] = grid[row][col]
 		}
-		clues := extractCluesFromRow(column)
-		colClues[col] = types.LineClue{
-			Clues: clues,
-			LineID: types.LineID{
-				Direction: types.Column,
-				Index:     uint8(col),
-			},
+		clueItems := extractCluesFromRow(column)
+		lineID := types.LineID{
+			Direction: types.Column,
+			Index:     col,
 		}
+		clues[lineID] = clueItems
 	}
 
-	return rowClues, colClues, nil
+	return clues, nil
 }
 
 // extractCluesFromRow extracts clue numbers from a row or column of the grid
@@ -399,8 +395,8 @@ func extractCluesFromRow(row []int) []types.ClueItem {
 				// Color changed, save previous block if it exists
 				if currentCount > 0 {
 					clues = append(clues, types.ClueItem{
-						ColorID:   uint8(currentColor),
-						BlockSize: uint8(currentCount),
+						ColorID: currentColor,
+						Clue:    currentCount,
 					})
 				}
 				// Start new block
@@ -411,8 +407,8 @@ func extractCluesFromRow(row []int) []types.ClueItem {
 			if currentCount > 0 {
 				// End current block
 				clues = append(clues, types.ClueItem{
-					ColorID:   uint8(currentColor),
-					BlockSize: uint8(currentCount),
+					ColorID: currentColor,
+					Clue:    currentCount,
 				})
 				// Reset for next block
 				currentCount = 0
@@ -424,8 +420,8 @@ func extractCluesFromRow(row []int) []types.ClueItem {
 	// Add the final block if one was in progress
 	if currentCount > 0 {
 		clues = append(clues, types.ClueItem{
-			ColorID:   uint8(currentColor),
-			BlockSize: uint8(currentCount),
+			ColorID: currentColor,
+			Clue:    currentCount,
 		})
 	}
 

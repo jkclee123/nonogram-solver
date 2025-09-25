@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	factory "nonogram-solver/factory"
 	network "nonogram-solver/network"
 )
 
@@ -26,10 +25,7 @@ func main() {
 		return
 	}
 
-	start = time.Now()
-	lines := factory.CreateLines(*nonogramData)
-	elapsed = time.Since(start)
-	// fmt.Println("\n=== GENERATED LINES ===")
-	// lines.Print()
-	fmt.Printf("Created %d lines in %v\n", len(lines.Lines), elapsed)
+	// Print the parsed data
+	nonogramData.Print()
+
 }
