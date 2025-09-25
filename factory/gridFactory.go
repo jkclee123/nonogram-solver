@@ -89,8 +89,8 @@ func createLineFromClues(clues []types.ClueItem, size int) types.Line {
 	facts := make(map[int]*big.Int)
 
 	for colorID := range colorSet {
-		combinations[colorID] = []*big.Int{} // empty slice of big int
-		facts[colorID] = big.NewInt(0)       // big int 0
+		combinations = GenerateColorCombinations(clues, size)
+		facts[colorID] = big.NewInt(0)
 	}
 
 	return types.Line{
