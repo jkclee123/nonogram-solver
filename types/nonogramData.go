@@ -68,7 +68,16 @@ func (nd *NonogramData) Print() {
 
 	fmt.Printf("\n=== COLOR MAP ===\n")
 	if len(nd.ColorMap) > 0 {
-		for colorID, hexColor := range nd.ColorMap {
+		// Collect and sort color IDs
+		var colorIDs []int
+		for colorID := range nd.ColorMap {
+			colorIDs = append(colorIDs, colorID)
+		}
+		sort.Ints(colorIDs)
+
+		// Print colors in sorted order
+		for _, colorID := range colorIDs {
+			hexColor := nd.ColorMap[colorID]
 			fmt.Printf("Color %d: %s\n", colorID, hexColor)
 		}
 	} else {

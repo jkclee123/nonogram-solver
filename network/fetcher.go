@@ -33,31 +33,35 @@ const (
 	dataModulusIndex    = 2
 	dataMultiplierIndex = 3
 
-	// Color calculation constants
-	colorBaseValue = 256
+	// Minimum number of encoded fields required for decoding
+	minEncodedFields = 4
+
+	// Timeout for outbound requests
+	requestTimeout = 10 * time.Second
 )
 
-// FetchPage retrieves the HTML content for a nonogram by ID
-// It tries multiple URL patterns in parallel to accommodate different nonogram formats
+var (
+	dataRegex  = regexp.MustCompile(`var d=(\[.*?\]);`)
+	httpClient = &http.Client{}
+)
+
+// FetchPage retrieves the HTML content for a nonogram by ID.
+// It tries multiple URL patterns in parallel to accommodate different formats.
 func FetchPage(nonogramID string) ([]byte, error) {
 	if nonogramID == "" {
 		return nil, fmt.Errorf("nonogramID cannot be empty")
 	}
 
-	// Try both URL patterns in parallel
-	urls := []string{
-		fmt.Sprintf(baseURLPattern1, nonogramID),
-		fmt.Sprintf(baseURLPattern2, nonogramID),
-	}
-
-	// Create a context with timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	// Channel to receive the result from the first successful request
+	urls := []string{
+		fmt.Sprintf(baseURLPattern2, nonogramID),
+		fmt.Sprintf(baseURLPattern1, nonogramID),
+	}
+
 	resultChan := make(chan fetchResult, len(urls))
 
-	// Start goroutines for each URL
 	var wg sync.WaitGroup
 	for _, url := range urls {
 		wg.Add(1)
@@ -67,16 +71,14 @@ func FetchPage(nonogramID string) ([]byte, error) {
 		}(url)
 	}
 
-	// Close the channel when all goroutines are done
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
 
-	// Wait for the first successful result
 	for result := range resultChan {
 		if result.err == nil {
-			cancel() // Cancel other requests
+			cancel()
 			return result.body, nil
 		}
 	}
@@ -93,31 +95,31 @@ type fetchResult struct {
 
 // fetchURL attempts to fetch a URL and sends the result to the channel
 func fetchURL(ctx context.Context, url string, resultChan chan<- fetchResult) {
-	client := &http.Client{}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		resultChan <- fetchResult{nil, fmt.Errorf("failed to create request for %s: %w", url, err), url}
+		resultChan <- fetchResult{err: fmt.Errorf("failed to create request for %s: %w", url, err), url: url}
 		return
 	}
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		resultChan <- fetchResult{nil, fmt.Errorf("failed to fetch %s: %w", url, err), url}
+		resultChan <- fetchResult{err: fmt.Errorf("failed to fetch %s: %w", url, err), url: url}
 		return
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			resultChan <- fetchResult{nil, fmt.Errorf("failed to read response body from %s: %w", url, err), url}
-			return
-		}
-		resultChan <- fetchResult{body, nil, url}
-	} else {
-		resultChan <- fetchResult{nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url), url}
+	if resp.StatusCode != http.StatusOK {
+		resultChan <- fetchResult{err: fmt.Errorf("HTTP %d from %s", resp.StatusCode, url), url: url}
+		return
 	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		resultChan <- fetchResult{err: fmt.Errorf("failed to read response body from %s: %w", url, err), url: url}
+		return
+	}
+
+	resultChan <- fetchResult{body: body, url: url}
 }
 
 // ParseNonogramData extracts and decodes the nonogram clues from the HTML
@@ -128,14 +130,11 @@ func ParseNonogramData(htmlContent []byte) (*types.NonogramData, error) {
 
 	htmlStr := string(htmlContent)
 
-	// Extract the JavaScript variable 'd' containing the nonogram data
-	dataRegex := regexp.MustCompile(`var d=(\[.*?\]);`)
 	matches := dataRegex.FindStringSubmatch(htmlStr)
 	if len(matches) < 2 {
 		return nil, fmt.Errorf("could not find nonogram data variable 'd' in HTML")
 	}
 
-	// Parse the JSON array containing the encoded nonogram data
 	var rawData [][]int
 	if err := json.Unmarshal([]byte(matches[1]), &rawData); err != nil {
 		return nil, fmt.Errorf("failed to parse nonogram data JSON: %w", err)
@@ -145,39 +144,31 @@ func ParseNonogramData(htmlContent []byte) (*types.NonogramData, error) {
 		return nil, fmt.Errorf("parsed nonogram data is empty")
 	}
 
-	// Decode the raw data into structured nonogram format
 	return decodeNonogramData(rawData)
 }
 
 // decodeNonogramData decodes the raw nonogram data from JavaScript format into structured data
 func decodeNonogramData(rawData [][]int) (*types.NonogramData, error) {
-	if len(rawData) < 4 {
-		return nil, fmt.Errorf("insufficient raw data for nonogram decoding (need at least 4 arrays)")
+	if len(rawData) <= gridDataIndex {
+		return nil, fmt.Errorf("insufficient raw data for nonogram decoding")
 	}
 
-	// Calculate grid dimensions and color count
 	width, height, numColors, err := calculateDimensions(rawData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate dimensions: %w", err)
 	}
 
-	fmt.Printf("Grid dimensions: %dx%d, Colors: %d\n", width, height, numColors)
-
-	// Initialize empty grid
 	grid := initializeGrid(width, height)
 
-	// Decode color information
 	colorMap, err := decodeColorData(rawData, numColors)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode color data: %w", err)
 	}
 
-	// Decode grid cell data
 	if err := decodeGridCells(rawData, grid, width, height, numColors); err != nil {
 		return nil, fmt.Errorf("failed to decode grid cells: %w", err)
 	}
 
-	// Extract clues from the populated grid
 	clues, err := extractAllClues(grid, width, height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract clues: %w", err)
@@ -197,34 +188,24 @@ func calculateDimensions(rawData [][]int) (width, height, numColors int, err err
 		return 0, 0, 0, fmt.Errorf("insufficient data arrays for dimension calculation")
 	}
 
-	// Calculate width using the formula from JavaScript: D = d[1][0]%d[1][3] + d[1][1]%d[1][3] - d[1][2]%d[1][3]
 	widthData := rawData[widthDataIndex]
-	if len(widthData) < 4 {
+	if len(widthData) < minEncodedFields {
 		return 0, 0, 0, fmt.Errorf("width data array too short")
 	}
-	width = widthData[dataValueIndex]%widthData[dataMultiplierIndex] +
-		widthData[dataOffsetIndex]%widthData[dataMultiplierIndex] -
-		widthData[dataModulusIndex]%widthData[dataMultiplierIndex]
+	width = decodeDimension(widthData)
 
-	// Calculate height using the formula from JavaScript: C = d[2][0]%d[2][3] + d[2][1]%d[2][3] - d[2][2]%d[2][3]
 	heightData := rawData[heightDataIndex]
-	if len(heightData) < 4 {
+	if len(heightData) < minEncodedFields {
 		return 0, 0, 0, fmt.Errorf("height data array too short")
 	}
-	height = heightData[dataValueIndex]%heightData[dataMultiplierIndex] +
-		heightData[dataOffsetIndex]%heightData[dataMultiplierIndex] -
-		heightData[dataModulusIndex]%heightData[dataMultiplierIndex]
+	height = decodeDimension(heightData)
 
-	// Calculate number of colors using the formula from JavaScript: Aa = d[3][0]%d[3][3] + d[3][1]%d[3][3] - d[3][2]%d[3][3]
 	colorsData := rawData[colorsDataIndex]
-	if len(colorsData) < 4 {
+	if len(colorsData) < minEncodedFields {
 		return 0, 0, 0, fmt.Errorf("colors data array too short")
 	}
-	numColors = colorsData[dataValueIndex]%colorsData[dataMultiplierIndex] +
-		colorsData[dataOffsetIndex]%colorsData[dataMultiplierIndex] -
-		colorsData[dataModulusIndex]%colorsData[dataMultiplierIndex]
+	numColors = decodeDimension(colorsData)
 
-	// Validate calculated dimensions
 	if width <= 0 || height <= 0 {
 		return 0, 0, 0, fmt.Errorf("invalid grid dimensions: %dx%d", width, height)
 	}
@@ -233,6 +214,12 @@ func calculateDimensions(rawData [][]int) (width, height, numColors int, err err
 	}
 
 	return width, height, numColors, nil
+}
+
+func decodeDimension(data []int) int {
+	return data[dataValueIndex]%data[dataMultiplierIndex] +
+		data[dataOffsetIndex]%data[dataMultiplierIndex] -
+		data[dataModulusIndex]%data[dataMultiplierIndex]
 }
 
 // initializeGrid creates an empty 2D grid with the specified dimensions
@@ -260,30 +247,36 @@ func decodeColorData(rawData [][]int, numColors int) (map[int]string, error) {
 		}
 
 		colorData := rawData[colorIndex]
-		if len(colorData) < 4 {
+		if len(colorData) < minEncodedFields {
 			continue
 		}
 
-		var hexColor string
-		if numColors == 1 {
-			hexColor = "#000000"
-		} else {
-			// Decode color value based on JavaScript implementation
-			colorValueOffset := colorData[dataValueIndex] - colorBaseData[dataOffsetIndex]
-			colorValue := colorValueOffset + colorBaseValue
-
-			// Convert RGB value to hex format
-			// Color value is typically in the format 0xRRGGBB
-			r := (colorValue >> 16) & 0xFF
-			g := (colorValue >> 8) & 0xFF
-			b := colorValue & 0xFF
-
-			hexColor = fmt.Sprintf("#%02X%02X%02X", r, g, b)
-		}
-		colorMap[i+1] = hexColor // Color IDs start from 1
+		colorMap[i+1] = decodeColor(colorBaseData, colorData, numColors)
 	}
 
 	return colorMap, nil
+}
+
+func decodeColor(colorBaseData, colorData []int, numColors int) string {
+	if numColors == 1 {
+		return "#000000"
+	}
+
+	r := clampColor(colorData[dataValueIndex] - colorBaseData[dataValueIndex])
+	g := clampColor(colorData[dataOffsetIndex] - colorBaseData[dataValueIndex])
+	b := clampColor(colorData[dataModulusIndex] - colorBaseData[dataMultiplierIndex])
+
+	return fmt.Sprintf("#%02X%02X%02X", r, g, b)
+}
+
+func clampColor(value int) int {
+	if value < 0 {
+		return 0
+	}
+	if value > 255 {
+		return 255
+	}
+	return value
 }
 
 // decodeGridCells populates the grid with cell data from the raw encoded format
@@ -293,24 +286,18 @@ func decodeGridCells(rawData [][]int, grid [][]int, width, height, numColors int
 		return fmt.Errorf("no grid data found after color data")
 	}
 
-	// Extract grid metadata
 	gridMetadata := rawData[gridDataStart]
-	if len(gridMetadata) < 4 {
+	if len(gridMetadata) < minEncodedFields {
 		return fmt.Errorf("grid metadata array too short")
 	}
 
-	// Calculate number of grid data entries
-	gridDataCount := gridMetadata[dataValueIndex]%gridMetadata[dataMultiplierIndex]*(gridMetadata[dataValueIndex]%gridMetadata[dataMultiplierIndex]) +
-		gridMetadata[dataOffsetIndex]%gridMetadata[dataMultiplierIndex]*2 +
-		gridMetadata[dataModulusIndex]%gridMetadata[dataMultiplierIndex]
+	gridDataCount := calculateGridDataCount(gridMetadata)
 
-	// Extract grid offset data
 	gridOffsetData := rawData[gridDataStart+1]
-	if len(gridOffsetData) < 4 {
+	if len(gridOffsetData) < minEncodedFields {
 		return fmt.Errorf("grid offset data array too short")
 	}
 
-	// Decode each grid cell entry
 	for i := 0; i < gridDataCount; i++ {
 		dataIndex := gridDataStart + gridDataStartOffset + i
 		if dataIndex >= len(rawData) {
@@ -318,26 +305,40 @@ func decodeGridCells(rawData [][]int, grid [][]int, width, height, numColors int
 		}
 
 		cellData := rawData[dataIndex]
-		if len(cellData) < 4 {
+		if len(cellData) < minEncodedFields {
 			continue
 		}
 
-		// Calculate actual grid position and color
-		startCol := cellData[dataValueIndex] - gridOffsetData[dataValueIndex] - 1
-		colSpan := cellData[dataOffsetIndex] - gridOffsetData[dataOffsetIndex]
-		endCol := startCol + colSpan - 1
-		color := cellData[dataModulusIndex] - gridOffsetData[dataModulusIndex]
-		row := cellData[dataMultiplierIndex] - gridOffsetData[dataMultiplierIndex] - 1
+		startCol, endCol, color, row := decodeGridCell(cellData, gridOffsetData)
+		if row < 0 || row >= height {
+			continue
+		}
 
-		// Fill the grid cells within bounds
-		if row >= 0 && row < height {
-			for col := startCol; col <= endCol && col >= 0 && col < width; col++ {
-				grid[row][col] = color
+		for col := startCol; col <= endCol; col++ {
+			if col < 0 || col >= width {
+				continue
 			}
+			grid[row][col] = color
 		}
 	}
 
 	return nil
+}
+
+func calculateGridDataCount(gridMetadata []int) int {
+	encodedValue := gridMetadata[dataValueIndex] % gridMetadata[dataMultiplierIndex]
+	return encodedValue*encodedValue +
+		(gridMetadata[dataOffsetIndex]%gridMetadata[dataMultiplierIndex])*2 +
+		(gridMetadata[dataModulusIndex] % gridMetadata[dataMultiplierIndex])
+}
+
+func decodeGridCell(cellData, gridOffsetData []int) (startCol, endCol, color, row int) {
+	startCol = cellData[dataValueIndex] - gridOffsetData[dataValueIndex] - 1
+	colSpan := cellData[dataOffsetIndex] - gridOffsetData[dataOffsetIndex]
+	endCol = startCol + colSpan - 1
+	color = cellData[dataModulusIndex] - gridOffsetData[dataModulusIndex]
+	row = cellData[dataMultiplierIndex] - gridOffsetData[dataMultiplierIndex] - 1
+	return
 }
 
 // extractAllClues generates row and column clues from the populated grid
@@ -348,81 +349,62 @@ func extractAllClues(grid [][]int, width, height int) (map[types.LineID][]types.
 
 	clues := make(map[types.LineID][]types.ClueItem)
 
-	// Extract row clues
-	for row := 0; row < height; row++ {
-		if len(grid[row]) != width {
-			return nil, fmt.Errorf("grid row %d width mismatch: expected %d, got %d", row, width, len(grid[row]))
+	for rowIndex, row := range grid {
+		if len(row) != width {
+			return nil, fmt.Errorf("grid row %d width mismatch: expected %d, got %d", rowIndex, width, len(row))
 		}
-		clueItems := extractCluesFromRow(grid[row])
-		lineID := types.LineID{
-			Direction: types.Row,
-			Index:     row,
-		}
-		clues[lineID] = clueItems
+		lineID := types.LineID{Direction: types.Row, Index: rowIndex}
+		clues[lineID] = extractCluesFromRow(row)
 	}
 
-	// Extract column clues
 	for col := 0; col < width; col++ {
-		column := make([]int, height)
-		for row := 0; row < height; row++ {
-			column[row] = grid[row][col]
-		}
-		clueItems := extractCluesFromRow(column)
-		lineID := types.LineID{
-			Direction: types.Column,
-			Index:     col,
-		}
-		clues[lineID] = clueItems
+		column := buildColumn(grid, col)
+		lineID := types.LineID{Direction: types.Column, Index: col}
+		clues[lineID] = extractCluesFromRow(column)
 	}
 
 	return clues, nil
 }
 
-// extractCluesFromRow extracts clue numbers from a row or column of the grid
-// This function analyzes consecutive blocks of the same color and creates clue items
-func extractCluesFromRow(row []int) []types.ClueItem {
-	var clues []types.ClueItem
+func buildColumn(grid [][]int, col int) []int {
+	column := make([]int, len(grid))
+	for rowIndex := range grid {
+		column[rowIndex] = grid[rowIndex][col]
+	}
+	return column
+}
 
-	currentColor := 0
-	currentCount := 0
+// extractCluesFromRow extracts clue numbers from a row or column of the grid.
+// This function analyzes consecutive blocks of the same color and creates clue items.
+func extractCluesFromRow(row []int) []types.ClueItem {
+	var (
+		clues        []types.ClueItem
+		currentColor int
+		currentCount int
+	)
 
 	for _, cell := range row {
-		if cell > 0 { // Cell contains a color (non-empty)
-			if cell == currentColor {
-				// Continue counting consecutive cells of the same color
-				currentCount++
-			} else {
-				// Color changed, save previous block if it exists
-				if currentCount > 0 {
-					clues = append(clues, types.ClueItem{
-						ColorID: currentColor,
-						Clue:    currentCount,
-					})
-				}
-				// Start new block
-				currentColor = cell
-				currentCount = 1
+		switch {
+		case cell <= 0:
+			if currentCount == 0 {
+				continue
 			}
-		} else { // Empty cell (background)
+			clues = append(clues, types.ClueItem{ColorID: currentColor, Clue: currentCount})
+			currentColor = 0
+			currentCount = 0
+		case cell == currentColor:
+			currentCount++
+		default:
 			if currentCount > 0 {
-				// End current block
-				clues = append(clues, types.ClueItem{
-					ColorID: currentColor,
-					Clue:    currentCount,
-				})
-				// Reset for next block
-				currentCount = 0
-				currentColor = 0
+				clues = append(clues, types.ClueItem{ColorID: currentColor, Clue: currentCount})
 			}
+			currentColor = cell
+			currentCount = 1
 		}
 	}
 
-	// Add the final block if one was in progress
 	if currentCount > 0 {
-		clues = append(clues, types.ClueItem{
-			ColorID: currentColor,
-			Clue:    currentCount,
-		})
+		clues = append(clues, types.ClueItem{ColorID: currentColor, Clue: currentCount})
 	}
 
 	return clues
