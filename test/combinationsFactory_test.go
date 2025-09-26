@@ -200,11 +200,10 @@ func TestGenerateColorCombinations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := factory.GenerateColorCombinations(tt.clues, tt.size)
-			colorCombinations := result[tt.colorID]
+			result := factory.GenerateColorCombinations(tt.clues, tt.size, tt.colorID)
 
-			if !reflect.DeepEqual(colorCombinations, tt.expected) {
-				t.Errorf("GenerateColorCombinations() for color %d = %v, want %v", tt.colorID, colorCombinations, tt.expected)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("GenerateColorCombinations() for color %d = %v, want %v", tt.colorID, result, tt.expected)
 			}
 		})
 	}

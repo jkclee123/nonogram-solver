@@ -64,11 +64,12 @@ func createLineFromClues(clues []types.ClueItem, size int) types.Line {
 		colorSet[clue.ColorID] = true
 	}
 
-	// Initialize Combinations and Facts for each color
-	combinations := GenerateColorCombinations(clues, size)
+	// Initialize Combinations and Facts for each color (combinations will be lazily generated)
+	combinations := make(map[int][]*big.Int)
 	facts := make(map[int]*big.Int)
 
 	for colorID := range colorSet {
+		combinations[colorID] = []*big.Int{} // Empty slice, will be populated lazily
 		facts[colorID] = big.NewInt(0)
 	}
 
