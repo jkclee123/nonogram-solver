@@ -11,7 +11,7 @@ import (
 	"time"
 
 	factory "nonogram-solver/internal/factory"
-	"nonogram-solver/types"
+	"nonogram-solver/internal/types"
 )
 
 // Constants for URL patterns and data structure indices

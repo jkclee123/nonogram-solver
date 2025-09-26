@@ -29,7 +29,7 @@ func main() {
 
 	grid.Print()
 
-	fmt.Printf("Grid created %dx%d \n", grid.Width, grid.Height)
+	fmt.Printf("Grid created %dx%d \n", grid.Width(), grid.Height())
 	fmt.Printf("Grid creation completed in %v\n", elapsed)
 	fmt.Printf("Memory usage: %.2f MB (allocated), %.2f MB (total allocated)\n",
 		float64(memStatsAfter.Alloc-memStatsBefore.Alloc)/1024/1024,

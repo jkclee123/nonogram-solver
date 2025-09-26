@@ -16,25 +16,24 @@ Design a clean, concurrent project structure for a nonogram solver centered on `
   - `overlap.go` (overlap operation)
   - `crossref.go` (crossReference operation)
 - `internal/combinatorics/`
-  - `combinations.go` (lazy generator interface and cache)
-  - `generator.go` (per-color line combinations generator)
+  - `combinations.go` (lazy generator interface)
   - `bitset.go` (thin wrapper over `math/big.Int`)
 - `internal/grid/`
   - `grid.go` (grid model, row/col indexing, orthogonal lookup)
   - `propagation.go` (map overlap deltas to orthogonal work)
 - `internal/factory/`
   - `gridFactory.go` (build `Grid` and `Line` structures from input)
-  - `combinationsFactory.go` (wire `CombinationsProvider` strategy)
+  - `combinationsFactory.go` (wire `CombinationsProvider` strategy and generator implementation)
 - `internal/network/`
   - `fetcher.go` (fetch puzzle data if needed)
 - `internal/types/` (or keep top-level `types/` you already have)
-  - `direction.go`, `lineId.go`, `line.go` (if shared), `clueItem.go`, `nonogramData.go`, `grid.go`, `color.go`
+  - `direction.go`, `lineId.go`, `clueItem.go`, `facts.go`, `grid.go`
+  - `line.go` (Line model with references to combinatorics types)
 - `test/`
   - Unit tests by package (`*_test.go`) and integration harness
 
 **Note:** You already have `internal/factory`, `internal/network`, and `types/`. We can either:
-- migrate `types/` into `internal/types/` to keep APIs internal, or
-- keep `types/` as-is and have `internal/*` import from `types/`.
+- migrate `types/` into `internal/types/` to keep APIs internal,
 Either is fine; prefer internalizing if you don't need external consumers.
 
 ## Core Domain Models
@@ -44,10 +43,10 @@ Either is fine; prefer internalizing if you don't need external consumers.
   - `facts Facts` (bitsets; see below)
   - `combinations CombinationsProvider` (lazy, per-color)
 - `Facts`
-  - `filledByColor map[Color]*Bitset` (bits 1 = must be that color)
-  - `emptyMask *Bitset` (bits 1 = must be empty)
+  - `filledByColor map[Color]*combinatorics.Bitset` (bits 1 = must be that color)
+  - `emptyMask *combinatorics.Bitset` (bits 1 = must be empty)
   - Helpers: `IsKnown(i)`, `MarkFilled(i,color)`, `MarkEmpty(i)`
-- `CombinationsProvider`
+- `CombinationsProvider` (in `internal/combinatorics`)
   - Cache: `generated map[Color]bool`
   - Store: `combosByColor map[Color][]*Bitset`
   - API: `Get(color) ([]*Bitset, error)`
@@ -64,15 +63,15 @@ Either is fine; prefer internalizing if you don't need external consumers.
 
 ## Operations
 - `Overlap(line, color)`:
-  - Step 1 (empties): union across all colors' combos, complement → new empties.
+  - Step 1 (empties): **Only when all color combinations have been generated** - union across all colors' combos, complement → new empties.
   - Step 2 (fills): intersect across combos for `color` → new must-fill for that color.
   - Return `FactsDelta` and changed flag.
 - `CrossReference(line, color)`:
   - Apply known facts to eliminate incompatible combos for `color`.
-  - If combos filtered, return changed flag.
-  - Optionally, a light re-overlap can happen locally if combos shrink significantly (or schedule an explicit Overlap work item).
+  - If combos filtered, immediately perform Overlap for `lineID,color` to update facts.
 
 ## Work Model and Scheduling
+- **Initial Work Queue Seeding**: At solver startup, prioritize lines with the most overlap potential using slack score (lineLength − sum(clues) − (numClues − 1); lower slack = higher priority). Pick top K lines where K = min(32, totalLines/4), configurable via `maxInitialSeeds`. For each selected line, generate all colors' combinations upfront, then enqueue Overlap for all its colors (enabling empties calculation). Subsequent operations use CrossReference; when CrossReference filters combinations, immediately perform Overlap locally. When queue drains without changes, seed the next K lines once. Stop after two batches or when solved/stable.
 - `WorkItem`
   - `type` ∈ {Overlap, CrossReference}
   - `lineID LineID`
@@ -87,7 +86,7 @@ Either is fine; prefer internalizing if you don't need external consumers.
     - If facts changed → enqueue CrossReference for all orthogonal lines at impacted positions, for relevant colors.
   - For CrossReference:
     - Filter combos by facts for `color`.
-    - If combos changed → enqueue Overlap for `lineID,color`.
+    - If combos changed → immediately perform Overlap for `lineID,color` (no queueing).
 - Convergence
   - Continue until queue drains and no changes.
   - Solver returns when stable or solved; add a guard (max iterations) for safety.
@@ -110,7 +109,8 @@ Either is fine; prefer internalizing if you don't need external consumers.
   - Options: worker count, logging, deterministic mode, early-stop, etc.
 
 ## Testing Strategy
-- `internal/combinatorics`: unit tests for generator vs known small clues
+- `internal/factory`: unit tests for combinations generator and provider
+- `internal/combinatorics`: unit tests for bitset operations
 - `internal/line`: tests for overlap and crossReference on synthetic lines
 - `internal/solver`: end-to-end on tiny puzzles (2–5 tests)
 - Fuzz tests for crossRef stability (no resurrection of eliminated combos)

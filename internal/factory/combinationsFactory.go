@@ -5,8 +5,60 @@ import (
 	"runtime"
 	"sync"
 
-	"nonogram-solver/types"
+	"nonogram-solver/internal/types"
 )
+
+// CombinationsProviderImpl implements combinatorics.CombinationsProvider
+type CombinationsProviderImpl struct {
+	clues         []types.ClueItem
+	size          int
+	generated     map[int]bool
+	combosByColor map[int][]*types.Bitset
+	mu            sync.RWMutex
+}
+
+// NewCombinationsProvider creates a new lazy combinations provider
+func NewCombinationsProvider(clues []types.ClueItem, size int) *CombinationsProviderImpl {
+	return &CombinationsProviderImpl{
+		clues:         clues,
+		size:          size,
+		generated:     make(map[int]bool),
+		combosByColor: make(map[int][]*types.Bitset),
+	}
+}
+
+// Get returns combinations for the specified color, generating them lazily if needed
+func (cp *CombinationsProviderImpl) Get(color int) ([]*types.Bitset, error) {
+	cp.mu.RLock()
+	if cp.generated[color] {
+		result := cp.combosByColor[color]
+		cp.mu.RUnlock()
+		return result, nil
+	}
+	cp.mu.RUnlock()
+
+	// Generate combinations outside of read lock
+	rawCombos := GenerateColorCombinations(cp.clues, cp.size, color)
+
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+
+	// Double-check in case another goroutine generated it while we were waiting
+	if cp.generated[color] {
+		return cp.combosByColor[color], nil
+	}
+
+	// Convert []*big.Int to []*types.Bitset
+	bitsets := make([]*types.Bitset, len(rawCombos))
+	for i, combo := range rawCombos {
+		bitsets[i] = types.NewBitset(combo)
+	}
+
+	cp.combosByColor[color] = bitsets
+	cp.generated[color] = true
+
+	return bitsets, nil
+}
 
 // GenerateColorCombinations enumerates combinations for a single color by
 // projecting the multi-color clue line onto only the target color and treating

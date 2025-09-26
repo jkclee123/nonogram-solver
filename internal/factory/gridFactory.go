@@ -2,45 +2,49 @@ package factory
 
 import (
 	"math/big"
-
-	"nonogram-solver/types"
+	"nonogram-solver/internal/types"
 )
 
-// CreateGridFromClues builds a Grid directly from clues, dimensions, and color map.
-// It mirrors CreateGrid but avoids the NonogramData wrapper.
+// CreateGridFromClues creates a Grid from extracted clues
 func CreateGridFromClues(clues map[types.LineID][]types.ClueItem, width, height int, colorMap map[int]string) types.Grid {
-	lines := make(map[types.LineID]types.Line)
-	for lineID, cls := range clues {
-		var size int
-		if lineID.Direction == types.Row {
-			size = width
-		} else {
-			size = height
+	grid := types.Grid{
+		Rows: make([]*types.Line, height),
+		Cols: make([]*types.Line, width),
+	}
+
+	// Create rows
+	for row := 0; row < height; row++ {
+		lineID := types.LineID{Direction: types.Row, Index: row}
+		clueList := clues[lineID]
+		grid.Rows[row] = &types.Line{
+			ID:        lineID,
+			Direction: types.Row,
+			Length:    width,
+			Clues:     clueList,
+			Facts: &types.Facts{
+				FilledByColor: make(map[int]*types.Bitset),
+				EmptyMask:     types.NewBitset(big.NewInt(0)),
+			},
+			Combinations: NewCombinationsProvider(clueList, width),
 		}
-		lines[lineID] = createLineFromClues(cls)
-	}
-	return types.Grid{Lines: lines, Width: width, Height: height, ColorMap: colorMap}
-}
-
-// createLineFromClues creates a Line from clues and the line size
-func createLineFromClues(clues []types.ClueItem) types.Line {
-	// Find all unique colors in this line
-	colorSet := make(map[int]bool)
-	for _, clue := range clues {
-		colorSet[clue.ColorID] = true
 	}
 
-	// Initialize Combinations and Facts for each color (combinations will be lazily generated)
-	combinations := make(map[int][]*big.Int)
-	facts := make(map[int]*big.Int)
-
-	for colorID := range colorSet {
-		combinations[colorID] = []*big.Int{} // Empty slice, will be populated lazily
-		facts[colorID] = big.NewInt(0)
+	// Create columns
+	for col := 0; col < width; col++ {
+		lineID := types.LineID{Direction: types.Column, Index: col}
+		clueList := clues[lineID]
+		grid.Cols[col] = &types.Line{
+			ID:        lineID,
+			Direction: types.Column,
+			Length:    height,
+			Clues:     clueList,
+			Facts: &types.Facts{
+				FilledByColor: make(map[int]*types.Bitset),
+				EmptyMask:     types.NewBitset(big.NewInt(0)),
+			},
+			Combinations: NewCombinationsProvider(clueList, height),
+		}
 	}
 
-	return types.Line{
-		Combinations: combinations,
-		Facts:        facts,
-	}
+	return grid
 }

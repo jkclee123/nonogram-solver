@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"nonogram-solver/internal/factory"
-	"nonogram-solver/types"
+	"nonogram-solver/internal/types"
 )
 
 func TestGenerateColorCombinations(t *testing.T) {
