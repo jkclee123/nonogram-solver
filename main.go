@@ -6,8 +6,7 @@ import (
 	"runtime"
 	"time"
 
-	factory "nonogram-solver/factory"
-	network "nonogram-solver/network"
+	network "nonogram-solver/internal/network"
 )
 
 func main() {
@@ -16,9 +15,9 @@ func main() {
 		return
 	}
 	nonogramID := os.Args[1]
-	nonogramData, err := network.FetchNonogramData(nonogramID)
+	grid, err := network.FetchGrid(nonogramID)
 	if err != nil {
-		fmt.Printf("Error fetching nonogram data: %v\n", err)
+		fmt.Printf("Error fetching nonogram grid: %v\n", err)
 		return
 	}
 
@@ -31,7 +30,7 @@ func main() {
 	runtime.ReadMemStats(&memStatsBefore)
 
 	start := time.Now()
-	factory.CreateGrid(*nonogramData)
+	// Grid is already constructed by the fetcher; keep timing to report end-to-end
 	elapsed := time.Since(start)
 
 	// Force garbage collection and get final memory stats
@@ -40,7 +39,7 @@ func main() {
 	runtime.ReadMemStats(&memStatsAfter)
 
 	// grid.Print()
-	fmt.Printf("Grid created %dx%d \n", nonogramData.Width, nonogramData.Height)
+	fmt.Printf("Grid created %dx%d \n", grid.Width, grid.Height)
 	fmt.Printf("Grid creation completed in %v\n", elapsed)
 	fmt.Printf("Memory usage: %.2f MB (allocated), %.2f MB (total allocated)\n",
 		float64(memStatsAfter.Alloc-memStatsBefore.Alloc)/1024/1024,

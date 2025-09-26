@@ -6,6 +6,8 @@ import (
 )
 
 type Line struct {
+	ID           LineID
+	Clues        []ClueItem
 	Combinations map[int][]*big.Int
 	Facts        map[int]*big.Int
 }

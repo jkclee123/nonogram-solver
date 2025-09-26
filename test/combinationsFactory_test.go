@@ -1,10 +1,11 @@
-package factory
+package test
 
 import (
 	"math/big"
 	"reflect"
 	"testing"
 
+	"nonogram-solver/internal/factory"
 	"nonogram-solver/types"
 )
 
@@ -199,10 +200,11 @@ func TestGenerateColorCombinations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GenerateColorCombinations(tt.clues, tt.size, tt.colorID)
+			result := factory.GenerateColorCombinations(tt.clues, tt.size)
+			colorCombinations := result[tt.colorID]
 
-			if !reflect.DeepEqual(result, tt.expected) {
-				t.Errorf("GenerateColorCombinations() = %v, want %v", result, tt.expected)
+			if !reflect.DeepEqual(colorCombinations, tt.expected) {
+				t.Errorf("GenerateColorCombinations() for color %d = %v, want %v", tt.colorID, colorCombinations, tt.expected)
 			}
 		})
 	}

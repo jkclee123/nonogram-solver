@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	factory "nonogram-solver/internal/factory"
 	"nonogram-solver/types"
 )
 
@@ -122,65 +123,7 @@ func fetchURL(ctx context.Context, url string, resultChan chan<- fetchResult) {
 	resultChan <- fetchResult{body: body, url: url}
 }
 
-// ParseNonogramData extracts and decodes the nonogram clues from the HTML
-func ParseNonogramData(htmlContent []byte) (*types.NonogramData, error) {
-	if len(htmlContent) == 0 {
-		return nil, fmt.Errorf("HTML content is empty")
-	}
-
-	htmlStr := string(htmlContent)
-
-	matches := dataRegex.FindStringSubmatch(htmlStr)
-	if len(matches) < 2 {
-		return nil, fmt.Errorf("could not find nonogram data variable 'd' in HTML")
-	}
-
-	var rawData [][]int
-	if err := json.Unmarshal([]byte(matches[1]), &rawData); err != nil {
-		return nil, fmt.Errorf("failed to parse nonogram data JSON: %w", err)
-	}
-
-	if len(rawData) == 0 {
-		return nil, fmt.Errorf("parsed nonogram data is empty")
-	}
-
-	return decodeNonogramData(rawData)
-}
-
-// decodeNonogramData decodes the raw nonogram data from JavaScript format into structured data
-func decodeNonogramData(rawData [][]int) (*types.NonogramData, error) {
-	if len(rawData) <= gridDataIndex {
-		return nil, fmt.Errorf("insufficient raw data for nonogram decoding")
-	}
-
-	width, height, numColors, err := calculateDimensions(rawData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate dimensions: %w", err)
-	}
-
-	grid := initializeGrid(width, height)
-
-	colorMap, err := decodeColorData(rawData, numColors)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode color data: %w", err)
-	}
-
-	if err := decodeGridCells(rawData, grid, width, height, numColors); err != nil {
-		return nil, fmt.Errorf("failed to decode grid cells: %w", err)
-	}
-
-	clues, err := extractAllClues(grid, width, height)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract clues: %w", err)
-	}
-
-	return &types.NonogramData{
-		Clues:    clues,
-		Width:    width,
-		Height:   height,
-		ColorMap: colorMap,
-	}, nil
-}
+// Note: We no longer materialize NonogramData; we directly build Grid.
 
 // calculateDimensions extracts width, height, and color count from raw data
 func calculateDimensions(rawData [][]int) (width, height, numColors int, err error) {
@@ -410,22 +353,56 @@ func extractCluesFromRow(row []int) []types.ClueItem {
 	return clues
 }
 
-// FetchNonogramData fetches and parses the nonogram data for the given ID
-// This is the main entry point for retrieving nonogram data from the website
-func FetchNonogramData(nonogramID string) (*types.NonogramData, error) {
+// FetchNonogramData removed: use FetchGrid instead.
+
+// FetchGrid fetches, parses, and constructs a Grid directly for the given nonogram ID.
+// This bypasses exposing NonogramData to callers by internally converting clues to a Grid.
+func FetchGrid(nonogramID string) (types.Grid, error) {
 	if nonogramID == "" {
-		return nil, fmt.Errorf("nonogramID cannot be empty")
+		return types.Grid{}, fmt.Errorf("nonogramID cannot be empty")
 	}
 
 	htmlContent, err := FetchPage(nonogramID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch page for nonogram %s: %w", nonogramID, err)
+		return types.Grid{}, fmt.Errorf("failed to fetch page for nonogram %s: %w", nonogramID, err)
 	}
 
-	nonogramData, err := ParseNonogramData(htmlContent)
+	if len(htmlContent) == 0 {
+		return types.Grid{}, fmt.Errorf("HTML content is empty")
+	}
+
+	htmlStr := string(htmlContent)
+	matches := dataRegex.FindStringSubmatch(htmlStr)
+	if len(matches) < 2 {
+		return types.Grid{}, fmt.Errorf("could not find nonogram data variable 'd' in HTML")
+	}
+
+	var rawData [][]int
+	if err := json.Unmarshal([]byte(matches[1]), &rawData); err != nil {
+		return types.Grid{}, fmt.Errorf("failed to parse nonogram data JSON: %w", err)
+	}
+	if len(rawData) == 0 {
+		return types.Grid{}, fmt.Errorf("parsed nonogram data is empty")
+	}
+
+	width, height, numColors, err := calculateDimensions(rawData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse nonogram data for %s: %w", nonogramID, err)
+		return types.Grid{}, fmt.Errorf("failed to calculate dimensions: %w", err)
 	}
 
-	return nonogramData, nil
+	gridData := initializeGrid(width, height)
+	colorMap, err := decodeColorData(rawData, numColors)
+	if err != nil {
+		return types.Grid{}, fmt.Errorf("failed to decode color data: %w", err)
+	}
+	if err := decodeGridCells(rawData, gridData, width, height, numColors); err != nil {
+		return types.Grid{}, fmt.Errorf("failed to decode grid cells: %w", err)
+	}
+	clues, err := extractAllClues(gridData, width, height)
+	if err != nil {
+		return types.Grid{}, fmt.Errorf("failed to extract clues: %w", err)
+	}
+
+	grid := factory.CreateGridFromClues(clues, width, height, colorMap)
+	return grid, nil
 }
